@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { type CompletionItem, type Connection, type Definition, type DocumentSymbolParams, type Location, type ReferenceParams, type RenameParams, type SymbolInformation, type TextDocumentPositionParams, TextDocumentSyncKind, TextDocuments, type WorkspaceEdit, type WorkspaceFolder } from 'vscode-languageserver';
+import { type CompletionItem, type Connection, type Definition, type DocumentSymbolParams, type Location, type ReferenceParams, type RenameParams, type SymbolInformation, type TextDocumentPositionParams, TextDocumentSyncKind, TextDocuments, type WorkspaceEdit, type WorkspaceFolder, type CodeAction, CodeActionKind, type CodeActionParams, type ApplyWorkspaceEditResult } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
 import { generateInitialCompletions } from './completions';
@@ -65,6 +65,8 @@ export const startServer = (connection: Connection, fsProvider: FileSystemProvid
 
 	documents.listen(connection);
 
+	const AddVariableCommandId = 'choicescript/addVariable';
+
 	connection.onInitialize(() => {
 		const syncKind: TextDocumentSyncKind = TextDocumentSyncKind.Full;
 		return {
@@ -84,7 +86,13 @@ export const startServer = (connection: Connection, fsProvider: FileSystemProvid
 				definitionProvider: true,
 				referencesProvider: true,
 				renameProvider: true,
-				documentSymbolProvider: true
+				documentSymbolProvider: true,
+				codeActionProvider: {
+					codeActionKinds: [CodeActionKind.QuickFix]
+				},
+				executeCommandProvider: {
+					commands: [AddVariableCommandId]
+				}
 			}
 		};
 	});
@@ -101,6 +109,36 @@ export const startServer = (connection: Connection, fsProvider: FileSystemProvid
 		connection.onRequest(CustomMessages.SelectionWordCountRequest, onSelectionWordCount);
 	
 		heartbeatId = setInterval(heartbeat, heartbeatDelay);
+	});
+
+	// Provide quick fixes for undefined variables
+	connection.onCodeAction(async (params: CodeActionParams): Promise<CodeAction[] | undefined> => {
+		const doc = documents.get(params.textDocument.uri);
+		if (!doc) return undefined;
+
+		// Look for our specific undefined-variable diagnostics
+		const actions: CodeAction[] = [];
+		for (const d of params.context.diagnostics) {
+			const m = /^Variable\s+"([^"]+)"\s+not defined/.exec(d.message);
+			if (!m) continue;
+			const variable = m[1];
+			// Build two actions: global (startup) and local (*temp)
+			const titleGlobal = 'Add Global Variable';
+
+			const actionGlobal: CodeAction = {
+				title: titleGlobal,
+				kind: CodeActionKind.QuickFix,
+				diagnostics: [d],
+				command: {
+					title: titleGlobal,
+					command: AddVariableCommandId,
+					arguments: [{ variable }]
+				}
+			};
+			actions.push(actionGlobal);
+		}
+
+		return actions.length ? actions : undefined;
 	});
 
 	connection.onShutdown(() => {
@@ -168,6 +206,22 @@ export const startServer = (connection: Connection, fsProvider: FileSystemProvid
 		// Revalidate all open text documents
 		documents.all().forEach(doc => validateTextDocument(doc, projectIndex));
 	});
+
+	// Handle the command to add a variable (global/local)
+	connection.onExecuteCommand(async (params) => {
+		const args = params.arguments ?? [];
+		// args[0] should be our payload
+		if (!args || args.length == 0) return;
+		const payload = args[0] as { variable: string };
+		if (!payload?.variable) return;
+
+		try {
+			await addGlobalVariable(payload.variable);
+		}
+		catch (e) {
+			connection.console.error(`addVariable command failed: ${e}`);
+		}
+	});
 	
 	documents.onDidOpen(e => {
 		const isStartupFile = uriIsStartupFile(e.document.uri);
@@ -218,6 +272,60 @@ export const startServer = (connection: Connection, fsProvider: FileSystemProvid
 				});
 		});
 	}
+
+	/**
+	 * Add a global variable to startup.txt, appending to the last *create block if found.
+	 */
+	async function addGlobalVariable(variable: string): Promise<void> {
+		const startupUri = projectIndex.getSceneUri('startup');
+		if (!startupUri) {
+			connection.window.showErrorMessage('startup.txt not found');
+			return;
+		}
+
+		const startupFsPath = fileURLToPath(startupUri);
+		let text: string;
+		try {
+			text = await fileSystemService.readFile(startupFsPath);
+		}
+		catch (e) {
+			connection.window.showErrorMessage(`Failed to read startup.txt: ${e}`);
+			return;
+		}
+
+		// Find the last line that starts with *create or *create_array
+		const lines = text.split(/\r?\n/);
+		let insertLine = 0; // default to top of file if none found
+		for (let i = 0; i < lines.length; i++) {
+			const trimmed = lines[i].trimStart();
+			if (trimmed.startsWith('*create ') || trimmed.startsWith('*create_array ')) {
+				insertLine = i + 1; // insert after the last matched line
+			}
+		}
+
+		const edit: WorkspaceEdit = {
+			changes: {
+				[startupUri]: [
+					{
+						range: { start: { line: insertLine, character: 0 }, end: { line: insertLine, character: 0 } },
+						newText: `*create ${variable} 0\n`
+					}
+				]
+			}
+		};
+
+		const result: ApplyWorkspaceEditResult = await connection.workspace.applyEdit(edit);
+		if (!result?.applied) {
+			connection.window.showErrorMessage('Failed to apply edit to add global variable');
+			return;
+		}
+
+		// Re-index startup to update globals; mark project files changed to revalidate
+		await indexFile(startupFsPath);
+		projectFilesHaveChanged = true;
+	}
+
+
 
 	async function validateTextDocument(textDocument: TextDocument, projectIndex: ProjectIndex): Promise<void> {
 		// In generating diagnostics, the image path may update, so check that
