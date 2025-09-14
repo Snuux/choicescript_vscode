@@ -245,6 +245,16 @@
 					],
 					"description": "Whether to allow execution of *script commands in ChoiceScript games you're running inside VS Code. This poses a security risk and you should only run games who's code you've vetted whilst this setting is not 'never'."
 				},
+				"choicescript.ui.useBlackBackground": {
+					"type": "boolean",
+					"default": false,
+					"description": "When running the game preview, use a black background (night mode). Equivalent to Menu → Change settings → Use a black background."
+				},
+				"choicescript.ui.disableAnimations": {
+					"type": "boolean",
+					"default": true,
+					"description": "When running the game preview, disable page transition animations. Equivalent to Menu → Change settings → Don't animate between pages."
+				},
 				"choicescript.randomtest.putResultsInDocument": {
 					"type": "string",
 					"default": "fulltext",

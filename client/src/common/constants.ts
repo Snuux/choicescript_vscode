@@ -11,6 +11,8 @@ export enum Configuration {
 	UseCOGStyleGuide = 'useChoiceOfGamesStyleGuide',
 	DisableQuickSuggestions = 'disableQuickSuggestions',
 	AllowUnsafeScript = 'allowUnsafeScript',
+	UiUseBlackBackground = 'ui.useBlackBackground',
+	UiDisableAnimations = 'ui.disableAnimations',
 	RandomtestIterations = 'randomtest.iterations',
 	RandomtestSeed = 'randomtest.randomSeed',
 	RandomtestPutResultsInDocument = 'randomtest.putResultsInDocument',
