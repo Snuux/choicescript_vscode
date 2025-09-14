@@ -30,7 +30,7 @@
 	"repository": {
 		"comment": {
 			"name": "comment.line.cs",
-			"begin": "^\\s*\\*comment",
+			"begin": "^\\s*\\*comment\\b",
 			"end": "(?=$)",
 			"patterns": [
 				{
