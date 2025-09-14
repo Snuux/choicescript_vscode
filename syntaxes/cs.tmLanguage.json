@@ -279,7 +279,7 @@
 			"patterns": [
 				{
 					"name": "invalid.illegal.cs",
-					"match": "todo|TODO"
+					"match": "\\b(?:TODO|todo)\\b"
 				}
 			]
 		},
