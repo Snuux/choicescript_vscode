@@ -231,7 +231,7 @@
 			]
 		},
 		"operator": {
-			"match": "(\\*|\\+|-|\\/|%\\+|%-)|(!?=|>=?|<=?|%)|(&)|(and|or)",
+			"match": "(\\*|\\+|-|\\/|%\\+|%-)|(!?=|>=?|<=?|%)|(&)|(\\b(?:and|or)\\b)",
 			"captures": {
 				"1": {
 					"name": "keyword.operator.arithmetic.cs"
