@@ -253,7 +253,7 @@
 		},
 		"literal": {
 			"name": "constant.language.cs",
-			"match": "true|false"
+			"match": "\\b(?:true|false)\\b"
 		},
 		"variable-name": {
 			"name": "variable.other",
